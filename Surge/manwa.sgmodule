@@ -1,0 +1,13 @@
+#!name=漫蛙签到
+#!desc=manwari.cc 每日签到领积分 · Cookie 自动抓取
+#!author=dododook
+#!category=Checkin
+#!arguments=CronExp:10 8 * * *,Type:lucky,Host:manwari.cc
+#!arguments-desc=CronExp:签到时间 (Cron，默认每天 08:10)\n\nType:签到类型\nlucky = 试试手气（随机 1~15 积分）\nfixed = 普通签到（固定 5 积分）\n\nHost:站点域名，换域名时只改这里，不要带 https://
+
+[Script]
+漫蛙_Cookie=type=http-request,pattern=^https:\/\/{{{Host}}}\/(checkin|user\/center|api\/user\/),requires-body=0,max-size=0,script-path=https://raw.githubusercontent.com/dododook/surge-manwa/main/Scripts/manwa.js,argument=Host={{{Host}}}&Type={{{Type}}}
+漫蛙_签到=type=cron,cronexp="{{{CronExp}}}",wake-system=1,timeout=30,script-path=https://raw.githubusercontent.com/dododook/surge-manwa/main/Scripts/manwa.js,argument=Host={{{Host}}}&Type={{{Type}}}
+
+[MITM]
+hostname = %APPEND% {{{Host}}}
