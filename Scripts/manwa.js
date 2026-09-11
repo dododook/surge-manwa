@@ -18,8 +18,15 @@ const DEFAULT_HOST = "manwari.cc";
 const DEFAULT_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
-function notify(sub, body) {
+function finish(sub, body) {
+  const line = [sub, body].filter(Boolean).join(" | ");
+  console.log(`[${NAME}] ${line}`);
   $notification.post(NAME, sub || "", body || "");
+}
+
+function isCaptureRequest() {
+  if (typeof $request === "undefined" || !$request || !$request.url) return false;
+  return /\/(checkin|user\/center|api\/user\/)/i.test($request.url);
 }
 
 function argMap() {
@@ -99,7 +106,7 @@ function authHeaders(cookie, token, ua) {
   return h;
 }
 
-if (typeof $request !== "undefined") {
+if (isCaptureRequest()) {
   const cookie = header($request.headers, "Cookie");
   const token = pickToken(cookie, $request.headers);
   const ua = header($request.headers, "User-Agent");
@@ -117,7 +124,7 @@ if (typeof $request !== "undefined") {
       changed = true;
     }
     if (ua) $persistentStore.write(ua, KEY_UA);
-    if (changed) notify("获取成功", "登录态已保存，之后可关掉抓包脚本");
+    if (changed) finish("获取成功", "登录态已保存，之后可关掉抓包脚本");
     $done({});
   }
 } else {
@@ -129,8 +136,8 @@ if (typeof $request !== "undefined") {
     const ua = $persistentStore.read(KEY_UA) || DEFAULT_UA;
 
     if (!cookie && !token) {
-      notify("无法签到", `请先登录 ${host()}，打开一次签到页或「我的」`);
-      return $done();
+      finish("无法签到", `请先登录 ${host()}，打开一次签到页或「我的」`);
+      return $done({});
     }
 
     const headers = authHeaders(cookie, token, ua);
@@ -142,14 +149,15 @@ if (typeof $request !== "undefined") {
         headers,
         timeout: 20,
       });
+      console.log(`[${NAME}] status ${st.status} ${String(st.body).slice(0, 300)}`);
 
       if (st.status === 401 || /未登录|请先登录|unauthorized/i.test(st.body)) {
-        notify("登录失效", "重新登录后再打开一次签到页");
-        return $done();
+        finish("登录失效", "重新登录后再打开一次签到页");
+        return $done({});
       }
       if (st.status === 403 || /just a moment|cloudflare|cf-browser/i.test(st.body)) {
-        notify("被拦截", "Cloudflare 拦了，开着 Surge 再进一次签到页");
-        return $done();
+        finish("被拦截", "Cloudflare 拦了，开着 Surge 再进一次签到页");
+        return $done({});
       }
 
       const statusJson = parseJson(st.body);
@@ -162,8 +170,8 @@ if (typeof $request !== "undefined") {
         ]
           .filter(Boolean)
           .join(" · ");
-        notify("今日已签到", extra || "今天已经领过了");
-        return $done();
+        finish("今日已签到", extra || "今天已经领过了");
+        return $done({});
       }
 
       const res = await http({
@@ -173,12 +181,13 @@ if (typeof $request !== "undefined") {
         body: JSON.stringify({ checkin_type: type }),
         timeout: 20,
       });
+      console.log(`[${NAME}] checkin ${res.status} ${String(res.body).slice(0, 300)}`);
 
       const json = parseJson(res.body);
       const msg = (json && (json.msg || json.message)) || res.body || "无返回";
 
       if (res.status === 401) {
-        notify("登录失效", "重新登录后再打开一次签到页");
+        finish("登录失效", "重新登录后再打开一次签到页");
       } else if (json && json.code === 200) {
         const data = json.data || {};
         const extra = [
@@ -188,15 +197,15 @@ if (typeof $request !== "undefined") {
         ]
           .filter(Boolean)
           .join(" · ");
-        notify("签到成功", extra || msg);
+        finish("签到成功", extra || msg);
       } else if (/已签|重复|already/i.test(String(msg))) {
-        notify("今日已签到", msg);
+        finish("今日已签到", msg);
       } else {
-        notify(`签到失败 ${res.status}`, String(msg).slice(0, 180));
+        finish(`签到失败 ${res.status}`, String(msg).slice(0, 180));
       }
     } catch (e) {
-      notify("请求错误", String(e.message || e));
+      finish("请求错误", String(e.message || e));
     }
-    $done();
+    $done({});
   })();
 }
